@@ -494,6 +494,30 @@ module Mongo
     #
     # @raise [Mongo::OperationFailure] will be raised iff :w > 0 and the operation fails.
     def update(selector, document, opts={})
+      # $pushAll is no longer supported in newer versions of mongodb
+      # modify document so we no longer use it
+      transform_push_all = lambda do |document|
+        if document.is_a?(Hash)
+          document.keys.each do |key|
+            if key == '$pushAll'
+              document['$push'] ||= {}
+              document['$pushAll'].each do |field, values|
+                document['$push'][field] ||= { '$each' => [] }
+                document['$push'][field]['$each'].concat(values)
+              end
+              document.delete('$pushAll')
+            elsif document[key].is_a?(Hash) || document[key].is_a?(Array)
+              transform_push_all.call(document[key])
+            end
+          end
+        elsif document.is_a?(Array)
+          document.each do |subdoc|
+            transform_push_all.call(subdoc)
+          end
+        end
+      end
+      transform_push_all[document]
+
       send_write(:update, selector, document, !document.keys.first.to_s.start_with?("$"), opts)
     end
 

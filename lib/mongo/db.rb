@@ -602,6 +602,20 @@ module Mongo
 
       # arbitrary opts are merged into the selector
       command[:selector] = selector.merge!(opts)
+      # `:writeConcern` options (`:w`, `:j`, `:wtimeout`) get nested under
+      # command[:selector][:writeConcern] and
+      # cause issues with newer verion of mongo if dumped into the selector
+      command[:selector].delete(:w)
+      command[:selector].delete(:j)
+      command[:selector].delete(:wtimeout)
+
+      # `:multi` option gets nested under objects in command[:selector][:updates]
+      # and cause issues with newer verion of mongo if dumped into the selector
+      command[:selector].delete(:multi)
+
+      # `:validate` is a option something mongoid passes through on various commands
+      # and cause issues with newer verion of mongo if dumped into the selector
+      command[:selector].delete(:validate) if command[:selector].key?(:insert) || command[:selector].key?(:update) || command[:selector].key?(:delete)
 
       begin
         result = Cursor.new(system_command_collection, command).next_document
